@@ -21,7 +21,12 @@ class ApiException implements Exception {
 
 /// FastAPI + MongoDB Compass / Render Live API client using Bearer Token JWT.
 class ApiService extends GetxService {
-  static const String _envBaseUrl = String.fromEnvironment('API_BASE_URL');
+  static const String defaultRenderBaseUrl =
+      'https://word-odyssey-api.onrender.com';
+  static const String _envBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: defaultRenderBaseUrl,
+  );
 
   final http.Client _http = http.Client();
   final customBaseUrl = ''.obs;
@@ -37,9 +42,10 @@ class ApiService extends GetxService {
   final _wsEvents = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get wsEvents => _wsEvents.stream;
 
-  String _resolvedLocalUrl = 'http://127.0.0.1:8000';
+  String _resolvedBaseUrl = defaultRenderBaseUrl;
 
-  static const List<String> _localCandidates = [
+  static const List<String> _fallbackCandidates = [
+    defaultRenderBaseUrl,
     'http://127.0.0.1:8000',
     'http://192.168.1.7:8000',
     'http://10.0.2.2:8000',
@@ -55,8 +61,7 @@ class ApiService extends GetxService {
           ? _envBaseUrl.substring(0, _envBaseUrl.length - 1)
           : _envBaseUrl;
     }
-    if (kIsWeb) return 'http://localhost:8000';
-    return _resolvedLocalUrl;
+    return _resolvedBaseUrl;
   }
 
   String get wsUrl {
@@ -94,7 +99,7 @@ class ApiService extends GetxService {
     String path, {
     Map<String, dynamic>? body,
     required bool auth,
-    Duration timeout = const Duration(seconds: 8),
+    Duration timeout = const Duration(seconds: 25),
   }) {
     final uri = Uri.parse('$base$path');
     switch (method) {
@@ -128,10 +133,9 @@ class ApiService extends GetxService {
       res = await _sendHttp(baseUrl, method, path, body: body, auth: auth);
       isConnected.value = true;
     } catch (_) {
-      // If using default local server, automatically probe other local candidates (USB, LAN, Emulator)
-      if (customBaseUrl.value.trim().isEmpty && _envBaseUrl.isEmpty && !kIsWeb) {
-        for (final candidate in _localCandidates) {
-          if (candidate == _resolvedLocalUrl) continue;
+      if (customBaseUrl.value.trim().isEmpty && !kIsWeb) {
+        for (final candidate in _fallbackCandidates) {
+          if (candidate == baseUrl) continue;
           try {
             res = await _sendHttp(
               candidate,
@@ -139,9 +143,9 @@ class ApiService extends GetxService {
               path,
               body: body,
               auth: auth,
-              timeout: const Duration(seconds: 3),
+              timeout: const Duration(seconds: 10),
             );
-            _resolvedLocalUrl = candidate;
+            _resolvedBaseUrl = candidate;
             isConnected.value = true;
             break;
           } catch (_) {}
@@ -151,7 +155,7 @@ class ApiService extends GetxService {
         isConnected.value = false;
         throw ApiException(
           503,
-          'Cannot reach FastAPI server at $baseUrl. Ensure backend is running or configure your Render URL.',
+          'Cannot reach server at $baseUrl. Please check your internet connection.',
         );
       }
     }

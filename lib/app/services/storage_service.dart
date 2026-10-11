@@ -204,7 +204,11 @@ class StorageService extends GetxService {
       if (!await file.exists()) return false;
       final map = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
       final savedBase = (map['apiBase'] ?? '').toString().trim();
-      if (savedBase.isNotEmpty) {
+      if (savedBase.isNotEmpty &&
+          !savedBase.contains('127.0.0.1') &&
+          !savedBase.contains('localhost') &&
+          !savedBase.contains('192.168.') &&
+          !savedBase.contains('10.0.2.2')) {
         _api.customBaseUrl.value = savedBase;
       }
       final token = (map['token'] ?? '').toString().trim();
